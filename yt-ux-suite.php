@@ -1,10 +1,10 @@
 <?php
 /**
  * Plugin Name: YouTube User Experience Suite
- * Plugin URI: https://example.com/yt-ux-suite
+ * Plugin URI: https://github.com/jsrothwell/yt-ux-suite
  * Description: Enhance user experience with lazy loading, responsive video player, search, notification bar, and timestamp links
  * Version: 1.0.0
- * Author: Your Name
+ * Author: Jamieson Rothwell
  * License: GPL v2 or later
  * Text Domain: yt-ux
  */
@@ -15,39 +15,39 @@ if (!defined('ABSPATH')) {
 
 class YTUXSuite {
     private $version = '1.0.0';
-    
+
     public function __construct() {
         // Admin hooks
         add_action('admin_menu', [$this, 'add_admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_scripts']);
-        
+
         // Frontend hooks
         add_action('wp_enqueue_scripts', [$this, 'enqueue_frontend_scripts']);
         add_action('wp_head', [$this, 'add_inline_styles']);
         add_action('wp_footer', [$this, 'add_notification_bar']);
-        
+
         // Content filters
         add_filter('the_content', [$this, 'process_video_embeds']);
         add_filter('embed_oembed_html', [$this, 'make_embeds_responsive'], 10, 4);
-        
+
         // AJAX hooks
         add_action('wp_ajax_ytux_dismiss_notification', [$this, 'dismiss_notification']);
         add_action('wp_ajax_nopriv_ytux_dismiss_notification', [$this, 'dismiss_notification']);
         add_action('wp_ajax_ytux_video_search', [$this, 'handle_video_search']);
         add_action('wp_ajax_nopriv_ytux_video_search', [$this, 'handle_video_search']);
-        
+
         // Shortcodes
         add_shortcode('video_search', [$this, 'video_search_shortcode']);
         add_shortcode('yt_timestamp', [$this, 'timestamp_link_shortcode']);
         add_shortcode('latest_videos', [$this, 'latest_videos_shortcode']);
-        
+
         // Widget
         add_action('widgets_init', [$this, 'register_widgets']);
-        
+
         register_activation_hook(__FILE__, [$this, 'activate']);
     }
-    
+
     public function activate() {
         // Set default options
         add_option('ytux_lazy_load', '1');
@@ -61,7 +61,7 @@ class YTUXSuite {
         add_option('ytux_preload_strategy', 'metadata');
         add_option('ytux_enable_keyboard', '1');
     }
-    
+
     public function add_admin_menu() {
         add_menu_page(
             'YT User Experience',
@@ -72,7 +72,7 @@ class YTUXSuite {
             'dashicons-visibility',
             31
         );
-        
+
         add_submenu_page(
             'yt-ux',
             'Settings',
@@ -82,22 +82,22 @@ class YTUXSuite {
             [$this, 'admin_settings_page']
         );
     }
-    
+
     public function register_settings() {
         // Performance Settings
         register_setting('ytux_settings', 'ytux_lazy_load');
         register_setting('ytux_settings', 'ytux_optimize_thumbnails');
         register_setting('ytux_settings', 'ytux_preload_strategy');
-        
+
         // Video Player Settings
         register_setting('ytux_settings', 'ytux_responsive_embeds');
         register_setting('ytux_settings', 'ytux_enable_keyboard');
         register_setting('ytux_settings', 'ytux_autoplay');
-        
+
         // Search Settings
         register_setting('ytux_settings', 'ytux_enable_search');
         register_setting('ytux_settings', 'ytux_search_placeholder');
-        
+
         // Notification Bar Settings
         register_setting('ytux_settings', 'ytux_notification_bar');
         register_setting('ytux_settings', 'ytux_notification_text');
@@ -107,27 +107,27 @@ class YTUXSuite {
         register_setting('ytux_settings', 'ytux_notification_color');
         register_setting('ytux_settings', 'ytux_notification_bg');
     }
-    
+
     public function enqueue_admin_scripts($hook) {
         if (strpos($hook, 'yt-ux') === false) {
             return;
         }
-        
+
         wp_enqueue_style('ytux-admin-css', plugin_dir_url(__FILE__) . 'css/admin.css', [], $this->version);
         wp_enqueue_script('ytux-admin-js', plugin_dir_url(__FILE__) . 'js/admin.js', ['jquery'], $this->version, true);
         wp_enqueue_style('wp-color-picker');
         wp_enqueue_script('wp-color-picker');
     }
-    
+
     public function enqueue_frontend_scripts() {
         wp_enqueue_style('ytux-frontend-css', plugin_dir_url(__FILE__) . 'css/frontend.css', [], $this->version);
         wp_enqueue_script('ytux-frontend-js', plugin_dir_url(__FILE__) . 'js/frontend.js', ['jquery'], $this->version, true);
-        
+
         // Lazy loading library
         if (get_option('ytux_lazy_load', '1')) {
             wp_enqueue_script('lozad', 'https://cdn.jsdelivr.net/npm/lozad@1.16.0/dist/lozad.min.js', [], '1.16.0', true);
         }
-        
+
         wp_localize_script('ytux-frontend-js', 'ytuxAjax', [
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('ytux_nonce'),
@@ -136,12 +136,12 @@ class YTUXSuite {
             'searchPlaceholder' => get_option('ytux_search_placeholder', 'Search videos...')
         ]);
     }
-    
+
     public function add_inline_styles() {
         $notification_color = get_option('ytux_notification_color', '#ffffff');
         $notification_bg = get_option('ytux_notification_bg', '#ff0000');
         $notification_position = get_option('ytux_notification_position', 'top');
-        
+
         ?>
         <style>
             .ytux-notification-bar {
@@ -149,23 +149,23 @@ class YTUXSuite {
                 color: <?php echo esc_attr($notification_color); ?>;
                 <?php echo $notification_position === 'top' ? 'top: 0;' : 'bottom: 0;'; ?>
             }
-            
+
             .ytux-notification-bar a {
                 color: <?php echo esc_attr($notification_color); ?>;
             }
         </style>
         <?php
     }
-    
+
     public function add_notification_bar() {
         if (!get_option('ytux_notification_bar', '1')) {
             return;
         }
-        
+
         // Check if user has dismissed notification
         $dismissed = isset($_COOKIE['ytux_notification_dismissed']) ? $_COOKIE['ytux_notification_dismissed'] : 0;
         $duration = get_option('ytux_notification_duration', '7');
-        
+
         // Check if notification should be shown
         $latest_post = get_posts([
             'post_type' => 'post',
@@ -173,31 +173,31 @@ class YTUXSuite {
             'orderby' => 'date',
             'order' => 'DESC'
         ]);
-        
+
         if (empty($latest_post)) {
             return;
         }
-        
+
         $post_date = strtotime($latest_post[0]->post_date);
         $days_old = (time() - $post_date) / (60 * 60 * 24);
-        
+
         // Don't show if post is older than duration setting
         if ($days_old > $duration) {
             return;
         }
-        
+
         // Don't show if already dismissed
         if ($dismissed == $latest_post[0]->ID) {
             return;
         }
-        
+
         $notification_text = get_option('ytux_notification_text', 'New video uploaded! Check it out →');
         $notification_link = get_option('ytux_notification_link', '');
-        
+
         if (empty($notification_link)) {
             $notification_link = get_permalink($latest_post[0]->ID);
         }
-        
+
         ?>
         <div class="ytux-notification-bar" data-post-id="<?php echo $latest_post[0]->ID; ?>">
             <div class="ytux-notification-content">
@@ -210,82 +210,82 @@ class YTUXSuite {
         </div>
         <?php
     }
-    
+
     public function dismiss_notification() {
         check_ajax_referer('ytux_nonce', 'nonce');
-        
+
         $post_id = intval($_POST['post_id']);
         setcookie('ytux_notification_dismissed', $post_id, time() + (86400 * 30), '/');
-        
+
         wp_send_json_success();
     }
-    
+
     public function process_video_embeds($content) {
         if (!is_singular() || !in_the_loop() || !is_main_query()) {
             return $content;
         }
-        
+
         $lazy_load = get_option('ytux_lazy_load', '1');
-        
+
         if ($lazy_load) {
             // Replace YouTube iframes with lazy loading version
             $content = preg_replace_callback(
                 '/<iframe[^>]*src=["\']([^"\']*youtube[^"\']*)["\'][^>]*>.*?<\/iframe>/i',
                 function($matches) {
                     $iframe = $matches[0];
-                    
+
                     // Extract src
                     preg_match('/src=["\']([^"\']*)["\']/', $iframe, $src_match);
                     $src = $src_match[1];
-                    
+
                     // Replace src with data-src for lazy loading
                     $iframe = str_replace('src="' . $src . '"', 'data-src="' . $src . '" src="about:blank"', $iframe);
                     $iframe = str_replace("src='" . $src . "'", "data-src='" . $src . "' src='about:blank'", $iframe);
-                    
+
                     // Add lazy loading class
                     $iframe = str_replace('<iframe', '<iframe class="lozad ytux-lazy-video"', $iframe);
-                    
+
                     return $iframe;
                 },
                 $content
             );
         }
-        
+
         return $content;
     }
-    
+
     public function make_embeds_responsive($html, $url, $attr, $post_id) {
         if (!get_option('ytux_responsive_embeds', '1')) {
             return $html;
         }
-        
+
         if (strpos($url, 'youtube.com') !== false || strpos($url, 'youtu.be') !== false) {
             return '<div class="ytux-responsive-embed">' . $html . '</div>';
         }
-        
+
         return $html;
     }
-    
+
     public function handle_video_search() {
         check_ajax_referer('ytux_nonce', 'nonce');
-        
+
         $search_term = sanitize_text_field($_POST['search']);
-        
+
         $args = [
             'post_type' => 'post',
             'posts_per_page' => 10,
             's' => $search_term,
             'orderby' => 'relevance'
         ];
-        
+
         $query = new WP_Query($args);
-        
+
         $results = [];
-        
+
         if ($query->have_posts()) {
             while ($query->have_posts()) {
                 $query->the_post();
-                
+
                 $results[] = [
                     'title' => get_the_title(),
                     'url' => get_permalink(),
@@ -296,28 +296,28 @@ class YTUXSuite {
             }
             wp_reset_postdata();
         }
-        
+
         wp_send_json_success($results);
     }
-    
+
     // SHORTCODE: Video Search
     public function video_search_shortcode($atts) {
         $atts = shortcode_atts([
             'placeholder' => get_option('ytux_search_placeholder', 'Search videos...'),
             'button_text' => 'Search'
         ], $atts);
-        
+
         if (!get_option('ytux_enable_search', '1')) {
             return '';
         }
-        
+
         ob_start();
         ?>
         <div class="ytux-video-search">
             <form class="ytux-search-form">
-                <input type="text" 
-                       name="video_search" 
-                       class="ytux-search-input" 
+                <input type="text"
+                       name="video_search"
+                       class="ytux-search-input"
                        placeholder="<?php echo esc_attr($atts['placeholder']); ?>"
                        autocomplete="off">
                 <button type="submit" class="ytux-search-button">
@@ -327,7 +327,7 @@ class YTUXSuite {
                     <?php echo esc_html($atts['button_text']); ?>
                 </button>
             </form>
-            
+
             <div class="ytux-search-results" style="display: none;">
                 <div class="ytux-search-results-header">
                     <span class="ytux-results-count"></span>
@@ -335,7 +335,7 @@ class YTUXSuite {
                 </div>
                 <div class="ytux-results-grid"></div>
             </div>
-            
+
             <div class="ytux-search-loading" style="display: none;">
                 <div class="ytux-spinner"></div>
                 Searching...
@@ -344,7 +344,7 @@ class YTUXSuite {
         <?php
         return ob_get_clean();
     }
-    
+
     // SHORTCODE: Timestamp Link
     public function timestamp_link_shortcode($atts, $content = '') {
         $atts = shortcode_atts([
@@ -352,17 +352,17 @@ class YTUXSuite {
             'time' => '0',
             'text' => $content
         ], $atts);
-        
+
         if (empty($atts['video_url'])) {
             return $content;
         }
-        
+
         // Convert time to seconds if in MM:SS or HH:MM:SS format
         $seconds = $this->parse_timestamp($atts['time']);
-        
+
         // Add timestamp parameter to URL
         $url = add_query_arg('t', $seconds . 's', $atts['video_url']);
-        
+
         return sprintf(
             '<a href="%s" class="ytux-timestamp-link" data-time="%s" target="_blank">%s</a>',
             esc_url($url),
@@ -370,27 +370,27 @@ class YTUXSuite {
             esc_html($atts['text'] ?: $atts['time'])
         );
     }
-    
+
     // SHORTCODE: Latest Videos Grid
     public function latest_videos_shortcode($atts) {
         $atts = shortcode_atts([
             'count' => 6,
             'columns' => 3
         ], $atts);
-        
+
         $args = [
             'post_type' => 'post',
             'posts_per_page' => $atts['count'],
             'orderby' => 'date',
             'order' => 'DESC'
         ];
-        
+
         $query = new WP_Query($args);
-        
+
         if (!$query->have_posts()) {
             return '<p>No videos found.</p>';
         }
-        
+
         ob_start();
         ?>
         <div class="ytux-latest-videos ytux-grid-<?php echo esc_attr($atts['columns']); ?>">
@@ -399,7 +399,7 @@ class YTUXSuite {
                     <a href="<?php the_permalink(); ?>" class="ytux-video-card-link">
                         <?php if (has_post_thumbnail()): ?>
                             <div class="ytux-video-thumbnail">
-                                <?php 
+                                <?php
                                 if (get_option('ytux_lazy_load', '1')) {
                                     echo '<img class="lozad" data-src="' . get_the_post_thumbnail_url(get_the_ID(), 'medium_large') . '" alt="' . esc_attr(get_the_title()) . '">';
                                 } else {
@@ -414,7 +414,7 @@ class YTUXSuite {
                                 </div>
                             </div>
                         <?php endif; ?>
-                        
+
                         <div class="ytux-video-info">
                             <h3 class="ytux-video-title"><?php the_title(); ?></h3>
                             <div class="ytux-video-meta">
@@ -429,33 +429,33 @@ class YTUXSuite {
         wp_reset_postdata();
         return ob_get_clean();
     }
-    
+
     private function parse_timestamp($time) {
         // If already in seconds
         if (is_numeric($time)) {
             return intval($time);
         }
-        
+
         // Parse MM:SS or HH:MM:SS format
         $parts = explode(':', $time);
         $parts = array_reverse($parts);
-        
+
         $seconds = 0;
         $multipliers = [1, 60, 3600]; // seconds, minutes, hours
-        
+
         foreach ($parts as $i => $part) {
             $seconds += intval($part) * $multipliers[$i];
         }
-        
+
         return $seconds;
     }
-    
+
     // Admin Pages
     public function admin_dashboard_page() {
         ?>
         <div class="wrap">
             <h1>YouTube User Experience Dashboard</h1>
-            
+
             <div class="ytux-dashboard-cards">
                 <div class="ytux-card">
                     <div class="ytux-card-icon">⚡</div>
@@ -463,21 +463,21 @@ class YTUXSuite {
                     <p>Lazy loading videos and optimized thumbnails improve page load times by up to 50%.</p>
                     <p><strong>Status:</strong> <?php echo get_option('ytux_lazy_load', '1') ? '✅ Active' : '❌ Inactive'; ?></p>
                 </div>
-                
+
                 <div class="ytux-card">
                     <div class="ytux-card-icon">📱</div>
                     <h3>Responsive Videos</h3>
                     <p>All video embeds automatically adapt to screen size for perfect mobile viewing.</p>
                     <p><strong>Status:</strong> <?php echo get_option('ytux_responsive_embeds', '1') ? '✅ Active' : '❌ Inactive'; ?></p>
                 </div>
-                
+
                 <div class="ytux-card">
                     <div class="ytux-card-icon">🔍</div>
                     <h3>Video Search</h3>
                     <p>Help visitors find exactly what they're looking for with instant search.</p>
                     <p><strong>Status:</strong> <?php echo get_option('ytux_enable_search', '1') ? '✅ Active' : '❌ Inactive'; ?></p>
                 </div>
-                
+
                 <div class="ytux-card">
                     <div class="ytux-card-icon">🔔</div>
                     <h3>Notification Bar</h3>
@@ -485,7 +485,7 @@ class YTUXSuite {
                     <p><strong>Status:</strong> <?php echo get_option('ytux_notification_bar', '1') ? '✅ Active' : '❌ Inactive'; ?></p>
                 </div>
             </div>
-            
+
             <div class="ytux-quick-start">
                 <h2>Quick Start Guide</h2>
                 <ol>
@@ -497,7 +497,7 @@ class YTUXSuite {
                 </ol>
             </div>
         </div>
-        
+
         <style>
         .ytux-dashboard-cards {
             display: grid;
@@ -540,25 +540,25 @@ class YTUXSuite {
         </style>
         <?php
     }
-    
+
     public function admin_settings_page() {
         if (isset($_POST['ytux_settings_submit'])) {
             check_admin_referer('ytux_settings_nonce');
-            
+
             // Performance Settings
             update_option('ytux_lazy_load', isset($_POST['ytux_lazy_load']) ? '1' : '0');
             update_option('ytux_optimize_thumbnails', isset($_POST['ytux_optimize_thumbnails']) ? '1' : '0');
             update_option('ytux_preload_strategy', sanitize_text_field($_POST['ytux_preload_strategy']));
-            
+
             // Video Player Settings
             update_option('ytux_responsive_embeds', isset($_POST['ytux_responsive_embeds']) ? '1' : '0');
             update_option('ytux_enable_keyboard', isset($_POST['ytux_enable_keyboard']) ? '1' : '0');
             update_option('ytux_autoplay', isset($_POST['ytux_autoplay']) ? '1' : '0');
-            
+
             // Search Settings
             update_option('ytux_enable_search', isset($_POST['ytux_enable_search']) ? '1' : '0');
             update_option('ytux_search_placeholder', sanitize_text_field($_POST['ytux_search_placeholder']));
-            
+
             // Notification Bar Settings
             update_option('ytux_notification_bar', isset($_POST['ytux_notification_bar']) ? '1' : '0');
             update_option('ytux_notification_text', sanitize_text_field($_POST['ytux_notification_text']));
@@ -567,17 +567,17 @@ class YTUXSuite {
             update_option('ytux_notification_position', sanitize_text_field($_POST['ytux_notification_position']));
             update_option('ytux_notification_color', sanitize_hex_color($_POST['ytux_notification_color']));
             update_option('ytux_notification_bg', sanitize_hex_color($_POST['ytux_notification_bg']));
-            
+
             echo '<div class="notice notice-success"><p>Settings saved successfully!</p></div>';
         }
-        
+
         ?>
         <div class="wrap">
             <h1>User Experience Settings</h1>
-            
+
             <form method="post" action="">
                 <?php wp_nonce_field('ytux_settings_nonce'); ?>
-                
+
                 <h2>⚡ Performance Optimization</h2>
                 <table class="form-table">
                     <tr>
@@ -610,7 +610,7 @@ class YTUXSuite {
                         </td>
                     </tr>
                 </table>
-                
+
                 <h2>📱 Video Player</h2>
                 <table class="form-table">
                     <tr>
@@ -641,7 +641,7 @@ class YTUXSuite {
                         </td>
                     </tr>
                 </table>
-                
+
                 <h2>🔍 Video Search</h2>
                 <table class="form-table">
                     <tr>
@@ -660,7 +660,7 @@ class YTUXSuite {
                         </td>
                     </tr>
                 </table>
-                
+
                 <h2>🔔 Notification Bar</h2>
                 <table class="form-table">
                     <tr>
@@ -714,13 +714,13 @@ class YTUXSuite {
                         </td>
                     </tr>
                 </table>
-                
+
                 <p class="submit">
                     <input type="submit" name="ytux_settings_submit" class="button-primary" value="Save Settings">
                 </p>
             </form>
         </div>
-        
+
         <script>
         jQuery(document).ready(function($) {
             $('.ytux-color-picker').wpColorPicker();
@@ -728,7 +728,7 @@ class YTUXSuite {
         </script>
         <?php
     }
-    
+
     public function register_widgets() {
         register_widget('YTUX_Search_Widget');
         register_widget('YTUX_Latest_Videos_Widget');
@@ -740,7 +740,7 @@ class YTUX_Search_Widget extends WP_Widget {
     public function __construct() {
         parent::__construct('ytux_search_widget', 'Video Search', ['description' => 'Search your videos']);
     }
-    
+
     public function widget($args, $instance) {
         echo $args['before_widget'];
         if (!empty($instance['title'])) {
@@ -749,7 +749,7 @@ class YTUX_Search_Widget extends WP_Widget {
         echo do_shortcode('[video_search]');
         echo $args['after_widget'];
     }
-    
+
     public function form($instance) {
         $title = !empty($instance['title']) ? $instance['title'] : 'Search Videos';
         ?>
@@ -759,7 +759,7 @@ class YTUX_Search_Widget extends WP_Widget {
         </p>
         <?php
     }
-    
+
     public function update($new_instance, $old_instance) {
         $instance = [];
         $instance['title'] = (!empty($new_instance['title'])) ? strip_tags($new_instance['title']) : '';
@@ -772,7 +772,7 @@ class YTUX_Latest_Videos_Widget extends WP_Widget {
     public function __construct() {
         parent::__construct('ytux_latest_widget', 'Latest Videos', ['description' => 'Display latest videos']);
     }
-    
+
     public function widget($args, $instance) {
         echo $args['before_widget'];
         if (!empty($instance['title'])) {
@@ -782,7 +782,7 @@ class YTUX_Latest_Videos_Widget extends WP_Widget {
         echo do_shortcode('[latest_videos count="' . $count . '" columns="1"]');
         echo $args['after_widget'];
     }
-    
+
     public function form($instance) {
         $title = !empty($instance['title']) ? $instance['title'] : 'Latest Videos';
         $count = !empty($instance['count']) ? $instance['count'] : 3;
@@ -797,7 +797,7 @@ class YTUX_Latest_Videos_Widget extends WP_Widget {
         </p>
         <?php
     }
-    
+
     public function update($new_instance, $old_instance) {
         $instance = [];
         $instance['title'] = (!empty($new_instance['title'])) ? strip_tags($new_instance['title']) : '';
