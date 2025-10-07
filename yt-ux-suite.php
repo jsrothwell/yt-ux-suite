@@ -490,9 +490,9 @@ class YTUXSuite {
                 <h2>Quick Start Guide</h2>
                 <ol>
                     <li>Configure settings in <a href="<?php echo admin_url('admin.php?page=yt-ux-settings'); ?>">Settings</a></li>
-                    <li>Add video search to any page: <code>[video_search]</code></li>
-                    <li>Display latest videos: <code>[latest_videos count="6" columns="3"]</code></li>
-                    <li>Create timestamp links: <code>[yt_timestamp video_url="URL" time="2:30"]Click here[/yt_timestamp]</code></li>
+                    <li>Add video search to any page: <code><?php echo esc_html('[video_search]'); ?></code></li>
+                    <li>Display latest videos: <code><?php echo esc_html('[latest_videos count="6" columns="3"]'); ?></code></li>
+                    <li>Create timestamp links: <code><?php echo esc_html('[yt_timestamp video_url="URL" time="2:30"]Click here[/yt_timestamp]'); ?></code></li>
                     <li>All features work automatically - videos will lazy load, embeds will be responsive!</li>
                 </ol>
             </div>
